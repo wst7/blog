@@ -155,16 +155,16 @@ async fn main() -> tokio::io::Result<()> {
     println!("Server listening on 127.0.0.1:7878");
 
     loop {
-        let (mut socket, addr) = listener.accept().await?;
-        println!("New connection from {}", addr);
-
-        tokio::spawn(async move {
-            let mut buffer = [0; 512];
-            if let Ok(_) = socket.read(&mut buffer).await {
-                println!("Received: {}", String::from_utf8_lossy(&buffer));
-                socket.write_all(b"Hello from async server!").await.unwrap();
+        match listener.accept().await {
+            Ok((socket, addr)) => {
+                println!("New connection from {}", addr);
+                tokio::spawn(handle_client(socket));
             }
-        });
+            Err(e) => {
+                eprintln!("Failed to accept connection: {}", e);
+                continue;
+            }
+        }
     }
 }
 ```
