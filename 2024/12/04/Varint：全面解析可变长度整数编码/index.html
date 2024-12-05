@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="SQLite 是一种广泛使用的嵌入式数据库引擎，其高效性在于采用了多种优化技术来减少存储空间并提升性能。其中，Varint（可变长度整数）是一种重要的编码方式。本文将详细解析 Varint 的定义、在 SQLite 中的应用以及其具体工作原理。  什么是 Varint？Varint 是一种 可变长度整数编码，它通过根据整数值的大小动态调整存储字节数来减少存储空间。对于较小的整数，Varint 只使">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Varint：全面解析可变长度整数编码">
+<meta property="og:url" content="https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/index.html">
+<meta property="og:site_name" content="步行街的Blog">
+<meta property="og:description" content="SQLite 是一种广泛使用的嵌入式数据库引擎，其高效性在于采用了多种优化技术来减少存储空间并提升性能。其中，Varint（可变长度整数）是一种重要的编码方式。本文将详细解析 Varint 的定义、在 SQLite 中的应用以及其具体工作原理。  什么是 Varint？Varint 是一种 可变长度整数编码，它通过根据整数值的大小动态调整存储字节数来减少存储空间。对于较小的整数，Varint 只使">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-12-04T22:39:43.000Z">
+<meta property="article:modified_time" content="2024-12-05T12:54:35.262Z">
+<meta property="article:author" content="wstreet">
+<meta property="article:tag" content="sqlite">
+<meta property="article:tag" content="Varint">
+<meta property="article:tag" content="Rust">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/blog/images/favicon.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/blog/images/favicon-192x192.png" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/blog/images/apple-touch-icon.png">
+        
+      
+    
+    <!-- title -->
+    <title>Varint：全面解析可变长度整数编码</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/blog/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="Menu"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="Menu"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="Top" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/blog/">首页</a></li><!--
+     --><!--
+       --><li><a href="/blog/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/blog/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/blog/projects_url">项目</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/blog/2024/11/16/%E5%9C%A8Rust%E4%B8%AD%E4%BD%BF%E7%94%A8TcpListener%E5%A4%84%E7%90%86TCP%E8%BF%9E%E6%8E%A5/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" href="http://www.facebook.com/sharer.php?u=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/" target="_blank" rel="noopener"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://twitter.com/share?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&text=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.linkedin.com/shareArticle?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://pinterest.com/pin/create/bookmarklet/?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&is_video=false&description=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Varint：全面解析可变长度整数编码&body=Check out this article: https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://getpocket.com/save?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://reddit.com/submit?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.stumbleupon.com/submit?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://digg.com/submit?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.tumblr.com/share/link?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&name=Varint：全面解析可变长度整数编码&description=" target="_blank" rel="noopener"><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://news.ycombinator.com/submitlink?u=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&t=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#什么是-Varint？"><span class="toc-number">1.</span> <span class="toc-text">什么是 Varint？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-在-SQLite-中的作用"><span class="toc-number">2.</span> <span class="toc-text">Varint 在 SQLite 中的作用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#可变长度编码的基础知识"><span class="toc-number">3.</span> <span class="toc-text">可变长度编码的基础知识</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#定义与用途"><span class="toc-number">3.1.</span> <span class="toc-text">定义与用途</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#与固定长度编码的比较"><span class="toc-number">3.2.</span> <span class="toc-text">与固定长度编码的比较</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#使用可变长度编码的优点"><span class="toc-number">3.3.</span> <span class="toc-text">使用可变长度编码的优点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLite-中-Varint-的存储结构"><span class="toc-number">4.</span> <span class="toc-text">SQLite 中 Varint 的存储结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Varint-的编码规则"><span class="toc-number">4.1.</span> <span class="toc-text">Varint 的编码规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#如何表示不同范围的整数"><span class="toc-number">4.2.</span> <span class="toc-text">如何表示不同范围的整数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Varint-的实际存储示例"><span class="toc-number">4.3.</span> <span class="toc-text">Varint 的实际存储示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-的工作原理"><span class="toc-number">5.</span> <span class="toc-text">Varint 的工作原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#数据分段的原理"><span class="toc-number">5.1.</span> <span class="toc-text">数据分段的原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#高效解析整数的步骤"><span class="toc-number">5.2.</span> <span class="toc-text">高效解析整数的步骤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#减少存储空间的策略"><span class="toc-number">5.3.</span> <span class="toc-text">减少存储空间的策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLite-使用-Varint-的场景"><span class="toc-number">6.</span> <span class="toc-text">SQLite 使用 Varint 的场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#表头信息中的-Varint"><span class="toc-number">6.1.</span> <span class="toc-text">表头信息中的 Varint</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#B-树结构中的-Varint-应用"><span class="toc-number">6.2.</span> <span class="toc-text">B 树结构中的 Varint 应用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据类型与-Varint-的结合"><span class="toc-number">6.3.</span> <span class="toc-text">数据类型与 Varint 的结合</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-的性能优势"><span class="toc-number">7.</span> <span class="toc-text">Varint 的性能优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#空间效率对比"><span class="toc-number">7.1.</span> <span class="toc-text">空间效率对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#对查询速度的影响"><span class="toc-number">7.2.</span> <span class="toc-text">对查询速度的影响</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#如何在性能与存储之间取得平衡"><span class="toc-number">7.3.</span> <span class="toc-text">如何在性能与存储之间取得平衡</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-的限制与注意事项"><span class="toc-number">8.</span> <span class="toc-text">Varint 的限制与注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#范围限制"><span class="toc-number">8.1.</span> <span class="toc-text">范围限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#对极大整数的处理"><span class="toc-number">8.2.</span> <span class="toc-text">对极大整数的处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#读取和写入时的性能影响"><span class="toc-number">8.3.</span> <span class="toc-text">读取和写入时的性能影响</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-解码实现（rust）"><span class="toc-number">9.</span> <span class="toc-text">Varint 解码实现（rust）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#解码算法的实现"><span class="toc-number">9.1.</span> <span class="toc-text">解码算法的实现</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Varint：全面解析可变长度整数编码
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">wstreet</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-12-04T22:39:43.000Z" itemprop="datePublished">2024-12-04</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/blog/categories/SQLite/">SQLite</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link" href="/blog/tags/Rust/" rel="tag">Rust</a>, <a class="tag-link" href="/blog/tags/Varint/" rel="tag">Varint</a>, <a class="tag-link" href="/blog/tags/sqlite/" rel="tag">sqlite</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>SQLite 是一种广泛使用的嵌入式数据库引擎，其高效性在于采用了多种优化技术来减少存储空间并提升性能。其中，<strong>Varint（可变长度整数）</strong>是一种重要的编码方式。本文将详细解析 Varint 的定义、在 SQLite 中的应用以及其具体工作原理。</p>
+<hr>
+<h2 id="什么是-Varint？"><a href="#什么是-Varint？" class="headerlink" title="什么是 Varint？"></a>什么是 Varint？</h2><p>Varint 是一种 <strong>可变长度整数编码</strong>，它通过根据整数值的大小动态调整存储字节数来减少存储空间。对于较小的整数，Varint 只使用 1 个字节，而较大的整数可以使用最多 9 个字节进行存储。</p>
+<p>Varint 的核心思想是对每个字节的最高位（most significant bit, MSB）进行特殊标记：</p>
+<ul>
+<li>如果 MSB 为 1，表示当前字节是整数编码的一部分，后续还有更多字节。</li>
+<li>如果 MSB 为 0，表示当前字节是编码的最后一个字节。</li>
+</ul>
+<hr>
+<h2 id="Varint-在-SQLite-中的作用"><a href="#Varint-在-SQLite-中的作用" class="headerlink" title="Varint 在 SQLite 中的作用"></a>Varint 在 SQLite 中的作用</h2><p>SQLite 广泛使用 Varint 来存储整数值，尤其是在以下场景：</p>
+<ul>
+<li>数据库文件中的页头和记录头。</li>
+<li>存储 B 树节点中的键和值。</li>
+<li>记录长度和偏移量的表示。</li>
+</ul>
+<p>通过 Varint 编码，SQLite 在存储效率和解析速度之间取得了良好的平衡，使其成为轻量级、高性能的数据库解决方案。</p>
+<hr>
+<h2 id="可变长度编码的基础知识"><a href="#可变长度编码的基础知识" class="headerlink" title="可变长度编码的基础知识"></a>可变长度编码的基础知识</h2><h3 id="定义与用途"><a href="#定义与用途" class="headerlink" title="定义与用途"></a>定义与用途</h3><p>可变长度编码是一种针对整数或其他数据类型的压缩方法。通过动态调整数据的存储长度，减少了固定长度编码可能造成的空间浪费。例如，一个整数 <code>1</code> 在固定长度编码中可能需要 4 个字节，而在 Varint 编码中仅需 1 个字节即可存储。</p>
+<h3 id="与固定长度编码的比较"><a href="#与固定长度编码的比较" class="headerlink" title="与固定长度编码的比较"></a>与固定长度编码的比较</h3><table>
+<thead>
+<tr>
+<th>编码类型</th>
+<th>优点</th>
+<th>缺点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>固定长度编码</td>
+<td>访问速度快，位置可直接计算</td>
+<td>可能浪费存储空间</td>
+</tr>
+<tr>
+<td>可变长度编码 (Varint)</td>
+<td>节省空间，适合小型或稀疏数据</td>
+<td>读取时需要额外的解码操作</td>
+</tr>
+</tbody>
+</table>
+<h3 id="使用可变长度编码的优点"><a href="#使用可变长度编码的优点" class="headerlink" title="使用可变长度编码的优点"></a>使用可变长度编码的优点</h3><p>SQLite 采用 Varint 编码的主要原因在于：</p>
+<ul>
+<li><strong>存储效率</strong>：小整数使用更少的字节，整体存储需求降低。</li>
+<li><strong>灵活性</strong>：适应不同范围的数据，满足各种存储需求。</li>
+<li><strong>性能平衡</strong>：尽管解码增加了一些计算量，但与存储和传输成本相比微不足道。</li>
+</ul>
+<hr>
+<h2 id="SQLite-中-Varint-的存储结构"><a href="#SQLite-中-Varint-的存储结构" class="headerlink" title="SQLite 中 Varint 的存储结构"></a>SQLite 中 Varint 的存储结构</h2><h3 id="Varint-的编码规则"><a href="#Varint-的编码规则" class="headerlink" title="Varint 的编码规则"></a>Varint 的编码规则</h3><p>Varint 使用一个或多个字节存储整数，每个字节的结构如下：</p>
+<ul>
+<li>最低 7 位：表示整数的实际数据。</li>
+<li>最高 1 位：控制位，用于指示是否有后续字节。</li>
+</ul>
+<p><strong>示例：</strong></p>
+<ul>
+<li>整数 <code>0x7F</code>（127），可以用一个字节存储：<code>01111111</code>。</li>
+<li>整数 <code>0x80</code>（128），需要两个字节存储：<code>10000000 00000001</code>。</li>
+</ul>
+<h3 id="如何表示不同范围的整数"><a href="#如何表示不同范围的整数" class="headerlink" title="如何表示不同范围的整数"></a>如何表示不同范围的整数</h3><p>根据 Varint 的规则，整数越大，使用的字节数越多。SQLite 使用 Varint 表示以下范围的整数：</p>
+<table>
+<thead>
+<tr>
+<th>字节数</th>
+<th>可表示的整数范围</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>0 - 127</td>
+</tr>
+<tr>
+<td>2</td>
+<td>128 - 16,383</td>
+</tr>
+<tr>
+<td>3</td>
+<td>16,384 - 2,097,151</td>
+</tr>
+<tr>
+<td>4 - 9</td>
+<td>更大范围的整数</td>
+</tr>
+</tbody>
+</table>
+<h3 id="Varint-的实际存储示例"><a href="#Varint-的实际存储示例" class="headerlink" title="Varint 的实际存储示例"></a>Varint 的实际存储示例</h3><p>以下示例演示了 Varint 的存储过程：</p>
+<ol>
+<li>整数 300 的二进制表示为 <code>100101100</code>，分为两个字节存储：<ul>
+<li>第一个字节：<code>10101100</code>（最高位为 1，表示有后续字节）。</li>
+<li>第二个字节：<code>00000010</code>（最高位为 0，表示结束）。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="Varint-的工作原理"><a href="#Varint-的工作原理" class="headerlink" title="Varint 的工作原理"></a>Varint 的工作原理</h2><h3 id="数据分段的原理"><a href="#数据分段的原理" class="headerlink" title="数据分段的原理"></a>数据分段的原理</h3><p>Varint 将整数拆分为 7 位一组，并通过控制位标识每组是否为最后一个字节。这种方法允许高效存储不同范围的整数。</p>
+<h3 id="高效解析整数的步骤"><a href="#高效解析整数的步骤" class="headerlink" title="高效解析整数的步骤"></a>高效解析整数的步骤</h3><p>SQLite 解析 Varint 时，会逐个读取字节并检查最高位：</p>
+<ol>
+<li>如果最高位为 1，提取低 7 位，拼接到结果中，并继续读取下一字节。</li>
+<li>如果最高位为 0，提取低 7 位，拼接后结束。</li>
+</ol>
+<p><strong>示例：</strong><br>解析整数 300 时：</p>
+<ul>
+<li>读取第一个字节 <code>10101100</code>，提取 <code>00101100</code>。</li>
+<li>读取第二个字节 <code>00000010</code>，提取 <code>00000010</code>。</li>
+<li>拼接结果为 <code>00000010 00101100</code>，即整数 300。</li>
+</ul>
+<h3 id="减少存储空间的策略"><a href="#减少存储空间的策略" class="headerlink" title="减少存储空间的策略"></a>减少存储空间的策略</h3><p>通过存储小整数时只使用必要的字节数，Varint 显著减少了存储需求。这对于 SQLite 这种面向嵌入式环境的数据库尤为重要。</p>
+<hr>
+<h2 id="SQLite-使用-Varint-的场景"><a href="#SQLite-使用-Varint-的场景" class="headerlink" title="SQLite 使用 Varint 的场景"></a>SQLite 使用 Varint 的场景</h2><h3 id="表头信息中的-Varint"><a href="#表头信息中的-Varint" class="headerlink" title="表头信息中的 Varint"></a>表头信息中的 Varint</h3><p>SQLite 表头使用 Varint 存储字段数量、字段偏移等信息，从而在节省存储空间的同时保持可扩展性。</p>
+<h3 id="B-树结构中的-Varint-应用"><a href="#B-树结构中的-Varint-应用" class="headerlink" title="B 树结构中的 Varint 应用"></a>B 树结构中的 Varint 应用</h3><p>SQLite 的 B 树节点使用 Varint 表示键值长度、子节点指针等数据，从而提高查找性能并减少磁盘占用。</p>
+<h3 id="数据类型与-Varint-的结合"><a href="#数据类型与-Varint-的结合" class="headerlink" title="数据类型与 Varint 的结合"></a>数据类型与 Varint 的结合</h3><p>某些字段类型（如 INTEGER 和 TEXT）的长度信息也通过 Varint 表示，为存储更高效提供了可能。</p>
+<hr>
+<h2 id="Varint-的性能优势"><a href="#Varint-的性能优势" class="headerlink" title="Varint 的性能优势"></a>Varint 的性能优势</h2><h3 id="空间效率对比"><a href="#空间效率对比" class="headerlink" title="空间效率对比"></a>空间效率对比</h3><p>与固定长度编码相比，Varint 在存储小型数据时节省了大量空间。例如：</p>
+<ul>
+<li>整数 <code>5</code> 的固定长度表示需要 4 字节，而 Varint 表示只需 1 字节。</li>
+</ul>
+<h3 id="对查询速度的影响"><a href="#对查询速度的影响" class="headerlink" title="对查询速度的影响"></a>对查询速度的影响</h3><p>尽管 Varint 增加了解码步骤，但由于其存储紧凑性，减少了磁盘 I/O 和内存使用，从而间接提升了查询性能。</p>
+<h3 id="如何在性能与存储之间取得平衡"><a href="#如何在性能与存储之间取得平衡" class="headerlink" title="如何在性能与存储之间取得平衡"></a>如何在性能与存储之间取得平衡</h3><p>SQLite 在需要高效存储时使用 Varint，而在性能关键部分（如固定偏移量读取）中避免使用 Varint，以实现性能与存储的最佳平衡。</p>
+<hr>
+<h2 id="Varint-的限制与注意事项"><a href="#Varint-的限制与注意事项" class="headerlink" title="Varint 的限制与注意事项"></a>Varint 的限制与注意事项</h2><h3 id="范围限制"><a href="#范围限制" class="headerlink" title="范围限制"></a>范围限制</h3><p>Varint 最多使用 9 个字节，限制了其能够表示的整数范围（最大 64 位无符号整数）。</p>
+<h3 id="对极大整数的处理"><a href="#对极大整数的处理" class="headerlink" title="对极大整数的处理"></a>对极大整数的处理</h3><p>对于极大整数，Varint 的编码效率降低，可能需要更多字节来存储。</p>
+<h3 id="读取和写入时的性能影响"><a href="#读取和写入时的性能影响" class="headerlink" title="读取和写入时的性能影响"></a>读取和写入时的性能影响</h3><p>解码和编码 Varint 会增加 CPU 的运算负担，尤其是在频繁访问或大量数据处理时。</p>
+<hr>
+<h2 id="Varint-解码实现（rust）"><a href="#Varint-解码实现（rust）" class="headerlink" title="Varint 解码实现（rust）"></a>Varint 解码实现（rust）</h2><h3 id="解码算法的实现"><a href="#解码算法的实现" class="headerlink" title="解码算法的实现"></a>解码算法的实现</h3><p>编码过程通过将整数拆分为 7 位一组并添加控制位实现；解码则逆向操作，逐字节拼接。</p>
+<p><strong>示例代码：</strong><br><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">pub</span> <span class="function"><span class="keyword">fn</span> <span class="title">encode_varint</span></span>(<span class="keyword">mut</span> num: <span class="built_in">u64</span>) -&gt; <span class="built_in">Vec</span>&lt;<span class="built_in">u8</span>&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut</span> buffer = <span class="built_in">Vec</span>::new(); <span class="comment">// 用于存储编码后的字节</span></span><br><span class="line">    <span class="keyword">loop</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut</span> byte = (num &amp; <span class="number">0x7F</span>) <span class="keyword">as</span> <span class="built_in">u8</span>; <span class="comment">// 提取低7位</span></span><br><span class="line">        num &gt;&gt;= <span class="number">7</span>; <span class="comment">// 右移7位</span></span><br><span class="line">        <span class="keyword">if</span> num != <span class="number">0</span> &#123;</span><br><span class="line">            byte |= <span class="number">0x80</span>; <span class="comment">// 设置最高位为1，表示还有后续字节</span></span><br><span class="line">        &#125;</span><br><span class="line">        buffer.push(byte); <span class="comment">// 添加当前字节到结果中</span></span><br><span class="line">        <span class="keyword">if</span> num == <span class="number">0</span> &#123;</span><br><span class="line">            <span class="keyword">break</span>; <span class="comment">// 没有更多数据，结束循环</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    buffer</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">pub</span> <span class="function"><span class="keyword">fn</span> <span class="title">decode_varint</span></span>(buffer: &amp;[<span class="built_in">u8</span>]) -&gt; anyhow::<span class="built_in">Result</span>&lt;(<span class="built_in">usize</span>, <span class="built_in">u64</span>)&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut</span> result = <span class="number">0u64</span>; <span class="comment">// 记录结果</span></span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut</span> n = <span class="number">0</span>; <span class="comment">// 记录读取的字节数</span></span><br><span class="line">    <span class="keyword">loop</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> byte = buffer[n];</span><br><span class="line">        <span class="comment">// byte &amp; 0x7F 获取低7bits有效数据</span></span><br><span class="line">        <span class="comment">// result &lt;&lt; 7 result 左移7位</span></span><br><span class="line">        <span class="comment">// ｜ 或运算</span></span><br><span class="line">        result = (result &lt;&lt; <span class="number">7</span>) | ((byte &amp; <span class="number">0x7F</span>) <span class="keyword">as</span> <span class="built_in">u64</span>);</span><br><span class="line">        n += <span class="number">1</span>;</span><br><span class="line">        <span class="keyword">if</span> byte &amp; <span class="number">0x80</span> == <span class="number">0</span> &#123; <span class="comment">// 取高位，1继续，0终止</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> n &gt;= <span class="number">9</span> &#123; <span class="comment">// 存储最多 64 位的无符号整数（u64），最多需要 9 个字节来表示</span></span><br><span class="line">            anyhow::bail!(<span class="string">"varint too long"</span>); </span><br><span class="line">        &#125; </span><br><span class="line">    &#125;</span><br><span class="line">    <span class="literal">Ok</span>((n, result))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/blog/">首页</a></li>
+         
+          <li><a href="/blog/about/">关于</a></li>
+         
+          <li><a href="/blog/archives/">归档</a></li>
+         
+          <li><a href="/blog/projects_url">项目</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#什么是-Varint？"><span class="toc-number">1.</span> <span class="toc-text">什么是 Varint？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-在-SQLite-中的作用"><span class="toc-number">2.</span> <span class="toc-text">Varint 在 SQLite 中的作用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#可变长度编码的基础知识"><span class="toc-number">3.</span> <span class="toc-text">可变长度编码的基础知识</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#定义与用途"><span class="toc-number">3.1.</span> <span class="toc-text">定义与用途</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#与固定长度编码的比较"><span class="toc-number">3.2.</span> <span class="toc-text">与固定长度编码的比较</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#使用可变长度编码的优点"><span class="toc-number">3.3.</span> <span class="toc-text">使用可变长度编码的优点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLite-中-Varint-的存储结构"><span class="toc-number">4.</span> <span class="toc-text">SQLite 中 Varint 的存储结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Varint-的编码规则"><span class="toc-number">4.1.</span> <span class="toc-text">Varint 的编码规则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#如何表示不同范围的整数"><span class="toc-number">4.2.</span> <span class="toc-text">如何表示不同范围的整数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Varint-的实际存储示例"><span class="toc-number">4.3.</span> <span class="toc-text">Varint 的实际存储示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-的工作原理"><span class="toc-number">5.</span> <span class="toc-text">Varint 的工作原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#数据分段的原理"><span class="toc-number">5.1.</span> <span class="toc-text">数据分段的原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#高效解析整数的步骤"><span class="toc-number">5.2.</span> <span class="toc-text">高效解析整数的步骤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#减少存储空间的策略"><span class="toc-number">5.3.</span> <span class="toc-text">减少存储空间的策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLite-使用-Varint-的场景"><span class="toc-number">6.</span> <span class="toc-text">SQLite 使用 Varint 的场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#表头信息中的-Varint"><span class="toc-number">6.1.</span> <span class="toc-text">表头信息中的 Varint</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#B-树结构中的-Varint-应用"><span class="toc-number">6.2.</span> <span class="toc-text">B 树结构中的 Varint 应用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据类型与-Varint-的结合"><span class="toc-number">6.3.</span> <span class="toc-text">数据类型与 Varint 的结合</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-的性能优势"><span class="toc-number">7.</span> <span class="toc-text">Varint 的性能优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#空间效率对比"><span class="toc-number">7.1.</span> <span class="toc-text">空间效率对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#对查询速度的影响"><span class="toc-number">7.2.</span> <span class="toc-text">对查询速度的影响</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#如何在性能与存储之间取得平衡"><span class="toc-number">7.3.</span> <span class="toc-text">如何在性能与存储之间取得平衡</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-的限制与注意事项"><span class="toc-number">8.</span> <span class="toc-text">Varint 的限制与注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#范围限制"><span class="toc-number">8.1.</span> <span class="toc-text">范围限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#对极大整数的处理"><span class="toc-number">8.2.</span> <span class="toc-text">对极大整数的处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#读取和写入时的性能影响"><span class="toc-number">8.3.</span> <span class="toc-text">读取和写入时的性能影响</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Varint-解码实现（rust）"><span class="toc-number">9.</span> <span class="toc-text">Varint 解码实现（rust）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#解码算法的实现"><span class="toc-number">9.1.</span> <span class="toc-text">解码算法的实现</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" href="http://www.facebook.com/sharer.php?u=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/" target="_blank" rel="noopener"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://twitter.com/share?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&text=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.linkedin.com/shareArticle?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://pinterest.com/pin/create/bookmarklet/?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&is_video=false&description=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Varint：全面解析可变长度整数编码&body=Check out this article: https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://getpocket.com/save?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://reddit.com/submit?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.stumbleupon.com/submit?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://digg.com/submit?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&title=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="http://www.tumblr.com/share/link?url=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&name=Varint：全面解析可变长度整数编码&description=" target="_blank" rel="noopener"><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="https://news.ycombinator.com/submitlink?u=https://wstreet.github.io/blog/2024/12/04/Varint%EF%BC%9A%E5%85%A8%E9%9D%A2%E8%A7%A3%E6%9E%90%E5%8F%AF%E5%8F%98%E9%95%BF%E5%BA%A6%E6%95%B4%E6%95%B0%E7%BC%96%E7%A0%81/&t=Varint：全面解析可变长度整数编码" target="_blank" rel="noopener"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2016-2024
+    wstreet
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/blog/">首页</a></li><!--
+     --><!--
+       --><li><a href="/blog/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/blog/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/blog/projects_url">项目</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/blog/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+</body>
+</html>
