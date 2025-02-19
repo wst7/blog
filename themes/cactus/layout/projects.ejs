@@ -1,0 +1,12 @@
+<div class="projects-container">
+  <% for (let project of site.data.projects) { %>
+    <div class="project-card">
+      <% if (project.image) { %>
+        <img src="<%= project.image %>" alt="<%= project.title %>">
+      <% } %>
+      <h3><%= project.name %></h3>
+      <p><%= project.desc %></p>
+      <a href="<%= project.url %>" class="btn">View Project</a>
+    </div>
+  <% } %>
+</div>

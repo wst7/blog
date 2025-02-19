@@ -1,0 +1,7 @@
+- name: "Requedit"
+  desc: "A simple http request proxy tool."
+  url: "https://github.com/requedit/requedit"
+
+- name: "Tam"
+  desc: "Tam is a task manager CLI tool written in Rust."
+  url: "https://github.com/wst7/tam"
