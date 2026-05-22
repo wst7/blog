@@ -1,7 +1,19 @@
-- name: "Requedit"
+- name: "tam task"
+  desc: "A tasks manager cli tool."
+  url: "https://github.com/wst7/tam"
+  lang: "Rust"
+
+- name: "runx"
+  desc: "Runx - Cross-platform code runner. Supports JavaScript & TypeScript. Python support is coming soon."
+  url: "https://github.com/wst7/runx"
+  lang: "TypeScript"
+
+- name: "pastoid"
+  desc: "Pastoid is a lightweight, fast clipboard manager."
+  url: "https://github.com/wst7/pastoid"
+  lang: "Rust"
+
+- name: "requedit"
   desc: "A simple http request proxy tool."
   url: "https://github.com/requedit/requedit"
-
-- name: "Tam"
-  desc: "Tam is a task manager CLI tool written in Rust."
-  url: "https://github.com/wst7/tam"
+  lang: "TypeScript"
